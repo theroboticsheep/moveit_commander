@@ -38,6 +38,7 @@ import sys
 import rospy
 from moveit_commander import RobotCommander, PlanningSceneInterface, roscpp_initialize, roscpp_shutdown
 from geometry_msgs.msg import PoseStamped
+from moveit_msgs.msg import Grasp
 
 if __name__=='__main__':
 
@@ -48,33 +49,52 @@ if __name__=='__main__':
     robot = RobotCommander()
     rospy.sleep(1)
 
-    # clean the scene
-    scene.remove_world_object("pole")
-    scene.remove_world_object("table")
-    scene.remove_world_object("part")
+    grasps = []
+    grasp = Grasp() 
+    grasp.id = "right_grasp" 
+    grasp.grasp_pose.header.frame_id = "base_link" 
+    grasp.grasp_pose.header.stamp = rospy.Time.now() 
+    grasp.grasp_pose.pose.position.x = 0.127233849387
+    grasp.grasp_pose.pose.position.y = -0.288138890182
+    grasp.grasp_pose.pose.position.z = 0.127521900721
+    grasp.grasp_pose.pose.orientation.w = -0.0267003256568
+    grasp.grasp_pose.pose.orientation.x = -0.0163927540977
+    grasp.grasp_pose.pose.orientation.y = -0.681901741856
+    grasp.grasp_pose.pose.orientation.z = 0.730772457525
+    grasps.append(grasp)
 
+    # clean the scene
+    scene.remove_world_object("part")
+    
+    part_x = 0.01
+    part_y = 0.01
+    part_z = 0.1
+    
+    part_x_offset = 0.1
+    part_y_offset = 0.02
+    part_z_offset = 0.06
     # publish a demo scene
     p = PoseStamped()
     p.header.frame_id = robot.get_planning_frame()
-    p.pose.position.x = 0.7
-    p.pose.position.y = -0.4
-    p.pose.position.z = 0.85
     p.pose.orientation.w = 1.0
-    scene.add_box("pole", p, (0.3, 0.1, 1.0))
-
-    p.pose.position.y = -0.2
-    p.pose.position.z = 0.175
-    scene.add_box("table", p, (0.5, 1.5, 0.35))
-
-    p.pose.position.x = 0.6
-    p.pose.position.y = -0.7
-    p.pose.position.z = 0.5
-    scene.add_box("part", p, (0.15, 0.1, 0.3))
+    p.pose.position.x = grasp.grasp_pose.pose.position.x + part_x + part_x_offset
+    p.pose.position.y = grasp.grasp_pose.pose.position.y + part_y_offset
+    p.pose.position.z = part_z/2 + part_z_offset
+    scene.add_box("part", p, (part_x, part_y, part_z))
 
     rospy.sleep(1)
 
     # pick an object
-    robot.right_arm.pick("part")
+    robot.right_arm.allow_replanning(True)
+    robot.right_arm.allow_looking(True)
+    robot.right_arm.set_goal_tolerance(0.05)
+    robot.right_arm.set_planning_time(60)
+    ret_val = -1
+    tries = 0
+    while ret_val == -1:
+        ret_val = robot.right_arm.pick("part", grasps)
+        tries = tries + 1
+        print "Attempt: " + str(tries) + ", Response: " + str(ret_val)
 
     rospy.spin()
     roscpp_shutdown()
